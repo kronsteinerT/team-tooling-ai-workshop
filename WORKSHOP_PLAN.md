@@ -1,114 +1,114 @@
-# Workshop: AI-gestütztes Code Refactoring
+# Workshop: AI-assisted Code Refactoring
 
 ## Setup
 
-**Voraussetzungen:** Java 21, Node.js 18+, Claude Code (`claude` im Terminal)
+**Prerequisites:** Java 21, Node.js 18+, Claude Code (`claude` in terminal)
 
 ```bash
-# Backend starten
+# Start backend
 cd backend
 ./gradlew bootRun
 
-# Frontend starten (neues Terminal)
+# Start frontend (new terminal)
 cd frontend
 npm install
 npm run dev
 ```
 
-App öffnen: `http://localhost:5173`
+Open the app: `http://localhost:5173`
 
 ---
 
-## Modul 1 — App kennenlernen (15 min)
+## Module 1 — Explore the App (15 min)
 
-Klick durch die App und notiere was dir auffällt. Probiere folgende Szenarien:
+Click through the app and note anything that stands out. Try the following scenarios:
 
-1. Einen **Tag löschen**, der noch mit Todos verknüpft ist
-2. Eine **Checkbox schnell zweimal klicken**
-3. **Filter schnell wechseln** (All → Done → Open)
+1. **Delete a tag** that is still linked to todos
+2. **Double-click a checkbox** quickly
+3. **Switch filters rapidly** (All → Done → Open)
 
-Was sind Bugs? Was sind Design-Probleme?
+What are bugs? What are design problems?
 
 ---
 
-## Modul 2 — Backend Refactoring
+## Module 2 — Backend Refactoring
 
-Starte Claude Code und lass dir die Code-Qualitätsprobleme erklären:
+Start Claude Code and ask it to explain the code quality issues:
 ```bash
 claude
 ```
 
-### Bereiche zum Untersuchen
+### Areas to investigate
 
 **Dependency Injection**
-- Wie werden Dependencies in `TodoController`, `TagController`, `TodoService` und `DataSeeder` injiziert?
-- *Hint: Es gibt einen moderneren Weg der Felder `final` macht und Klassen testbarer.*
+- How are dependencies injected in `TodoController`, `TagController`, `TodoService` and `DataSeeder`?
+- *Hint: There is a more modern approach that makes fields `final` and classes easier to test.*
 
 **Controller vs. Service**
-- Wie viel Logik steckt in `TodoController.list()`?
-- *Hint: Ein Controller sollte nur HTTP-Mapping machen — keine Business-Logik.*
+- How much logic is inside `TodoController.list()`?
+- *Hint: A controller should only handle HTTP mapping — no business logic.*
 
-**Fehlerbehandlung**
-- Was passiert bei einem Fehler in einem Endpoint?
-- *Hint: Spring hat einen zentralen Mechanismus für Exception-Handling.*
+**Error Handling**
+- What happens when an endpoint throws an exception?
+- *Hint: Spring has a central mechanism for exception handling across all controllers.*
 
-**Datenbankzugriffe**
-- Aktiviere `spring.jpa.show-sql=true` in `application.properties`. Wie viele SQL-Queries erzeugt `GET /api/todos`?
-- *Hint: Es sollte eine Query sein, nicht N+1.*
+**Database Queries**
+- Enable `spring.jpa.show-sql=true` in `application.properties`. How many SQL queries does `GET /api/todos` produce?
+- *Hint: It should be one query, not N+1.*
 
-**API-Design**
-- Was gibt der Controller direkt zurück? Welches Problem entsteht dadurch?
-- *Hint: Stichwort DTO — Data Transfer Object.*
+**API Design**
+- What does the controller return directly? What problem does this cause?
+- *Hint: Look up DTO — Data Transfer Object.*
 
-**Weitere Punkte zum Entdecken**
-- Logging: `System.out.println` vs. richtiges Logging-Framework
-- Validierung: Wie wird der Request-Body validiert?
-- Secrets: Schau in `application.properties`
+**More things to find**
+- Logging: `System.out.println` vs. a proper logging framework
+- Validation: How is the request body validated?
+- Secrets: Check `application.properties`
 
 ---
 
-## Modul 3 — Frontend Refactoring
+## Module 3 — Frontend Refactoring
 
-### Bereiche zum Untersuchen
+### Areas to investigate
 
 **TypeScript**
-- Schau in `App.tsx` — welchen Typ haben `todos` und die Handler-Parameter?
-- Schau in `types.ts` — wird diese Datei irgendwo importiert?
-- *Hint: `any` schaltet TypeScript effektiv aus.*
+- Check `App.tsx` — what type do `todos` and the handler parameters have?
+- Check `types.ts` — is this file imported anywhere?
+- *Hint: `any` effectively disables TypeScript.*
 
-**API-Calls**
-- Wo werden `fetch()`-Aufrufe gemacht? Was passiert wenn der Server 500 zurückgibt?
-- *Hint: `fetch()` wirft keinen Fehler bei HTTP-Fehlercodes — `res.ok` muss manuell geprüft werden.*
+**API Calls**
+- Where are `fetch()` calls made? What happens when the server returns 500?
+- *Hint: `fetch()` does not throw on HTTP error codes — `res.ok` must be checked manually.*
 
-**Komponenten-Struktur**
-- Zähle die `useState`-Calls in `App.tsx`. Welche gehören zusammen?
-- Welche Props werden durch mehrere Ebenen durchgereicht ohne genutzt zu werden?
+**Component Structure**
+- Count the `useState` calls in `App.tsx`. Which ones belong together?
+- Which props are passed through multiple layers without being used?
 
-**Listen-Rendering**
-- Welchen `key`-Prop benutzt `TodoList`? Warum ist das problematisch?
+**List Rendering**
+- What `key` prop does `TodoList` use? Why is this problematic?
 
-**Weitere Punkte zum Entdecken**
-- Loading- und Error-States: Was sieht der User beim Laden oder bei einem Fehler?
-- Formular-Validierung: Was passiert beim Submit mit leerem Titel?
-- Inline-Styles vs. CSS-Klassen
-
----
-
-## Modul 4 — Bug Hunt
-
-Nutze DevTools → Network → **Slow 3G** um die Bugs besser sichtbar zu machen.
-
-| Bug | Wie reproduzieren |
-|-----|-------------------|
-| Toggle Race Condition | Checkbox schnell zweimal klicken |
-| Filter Race Condition | Filter schnell wechseln |
-| Datum Off-by-one | DevTools → Sensors → Timezone auf "America/Los_Angeles" |
-| Tag-Delete Crash | Tag löschen der mit Todos verknüpft ist → Fehlermeldung im Backend-Log lesen |
-
-*Hint für Race Conditions: Schau dir an wie React State-Updates und asynchrone Requests zusammenspielen.*
+**More things to find**
+- Loading and error states: What does the user see while loading or on error?
+- Form validation: What happens when submitting with an empty title?
+- Inline styles vs. CSS classes
 
 ---
 
-## Referenz
+## Module 4 — Bug Hunt
 
-Vollständige Lösung: Branch `workshop-reference`
+Use DevTools → Network → **Slow 3G** to make the bugs more visible.
+
+| Bug | How to reproduce |
+|-----|-----------------|
+| Toggle Race Condition | Double-click a checkbox quickly |
+| Filter Race Condition | Switch filters rapidly |
+| Date Off-by-one | DevTools → Sensors → Timezone override to "America/Los_Angeles" |
+| Tag-Delete Crash | Delete a tag linked to todos → read the error in the backend log |
+
+*Hint for race conditions: Look at how React state updates and async requests interact.*
+
+---
+
+## Reference
+
+Complete solution: branch `workshop-reference`
