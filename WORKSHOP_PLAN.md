@@ -13,6 +13,86 @@ You interact with it in natural language. It will read the relevant code, explai
 
 ---
 
+## Starting a Greenfield Project with Claude Code
+
+When starting a new project from scratch, Claude Code works best when you give it enough context upfront rather than one small request at a time.
+
+### 1. Describe the full picture first
+
+Instead of asking for one file at a time, describe the whole project in one prompt:
+
+```
+I want to build a REST API in Spring Boot with the following requirements:
+- Manage tasks with title, description, priority (LOW/MEDIUM/HIGH) and due date
+- Filter and paginate tasks
+- PostgreSQL as database, Flyway for migrations
+- Use constructor injection, DTOs, @ControllerAdvice for error handling
+- Tests with MockMvc
+
+Generate the initial project structure.
+```
+
+The more context you give upfront, the less back-and-forth you need.
+
+### 2. Let Claude scaffold, then review
+
+Claude will generate multiple files at once. Before accepting everything:
+- Read through the key files (entity, controller, service)
+- Check that patterns match your team's standards
+- Ask follow-up questions: *"Why did you choose X over Y?"*
+
+### 3. Iterate incrementally
+
+Once the scaffold is in place, add features one at a time:
+```
+Add tag support — a task can have multiple tags, many-to-many relationship.
+Also add filtering by tag to the list endpoint.
+```
+
+---
+
+## What is CLAUDE.md for?
+
+`CLAUDE.md` is a file in the root of your repository that Claude Code reads **automatically at the start of every session**. It gives Claude persistent context about your project so you don't have to re-explain things every time.
+
+### What to put in CLAUDE.md
+
+**Commands** — how to build, test, run the project:
+```markdown
+## Commands
+- Run backend: `cd backend && ./gradlew bootRun`
+- Run tests: `./gradlew test`
+- Single test: `./gradlew test --tests "ClassName"`
+```
+
+**Architecture** — things that aren't obvious from reading individual files:
+```markdown
+## Architecture
+- Controllers return DTOs, never JPA entities directly
+- All service methods are @Transactional
+- Frontend proxies /api/* to localhost:8080 via Vite
+```
+
+**Conventions** — team decisions Claude should follow:
+```markdown
+## Conventions
+- Use constructor injection, never @Autowired on fields
+- New endpoints need an integration test in *ControllerTest.java
+- Error responses always use the ErrorResponse record
+```
+
+### What NOT to put in CLAUDE.md
+
+- Generic advice like "write clean code" or "add error handling" — too vague to be useful
+- Things that are obvious from reading the code
+- Temporary notes or in-progress work — use comments or a TODO file for that
+
+### The payoff
+
+Without `CLAUDE.md`, Claude has to re-read the whole codebase each session to understand your patterns. With a good `CLAUDE.md`, it immediately knows your conventions and produces consistent output from the first prompt.
+
+---
+
 ## Setup
 
 **Prerequisites:** Java 21, Node.js 18+, Claude Code (`claude` in terminal)
