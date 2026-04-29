@@ -1,17 +1,38 @@
-# Backend
+# Gradle
+.gradle/
 backend/build/
 backend/.gradle/
-*.iml
-.idea/
+backend/gradle/wrapper/gradle-wrapper.jar
 
-# Frontend
+# Java
+*.class
+*.jar
+*.war
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Node
 frontend/node_modules/
 frontend/dist/
-frontend/.vite/
-
-# OS
-.DS_Store
-Thumbs.db
 
 # Logs
+todo.log
+todo.log.*.gz
 *.log
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Environment
+.env
+.env.local
