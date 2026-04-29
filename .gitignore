@@ -1,0 +1,36 @@
+# Gradle
+.gradle/
+backend/build/
+backend/.gradle/
+gradlew.bat
+gradle/
+
+# Java
+*.class
+*.jar
+*.war
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+todo.log
+todo.log.*.gz
+*.log
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+.env.local
