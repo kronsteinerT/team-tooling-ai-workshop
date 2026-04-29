@@ -276,6 +276,81 @@ Why does deleting a tag that is linked to todos crash with a 500 error?
 
 ---
 
+## Module 5 — Prompt Patterns, Limits & Workflow *(20 min)*
+
+### Good vs. bad prompts
+
+The quality of Claude's output depends heavily on how you ask. Compare:
+
+| Weak | Strong |
+|------|--------|
+| "Fix my code" | "The `findFiltered()` method returns all todos when `tagId` is null — it should return all todos regardless of tag. Here's the current code: ..." |
+| "Add tests" | "Write integration tests for `TodoController` covering: 400 on blank title, 404 on unknown ID, and filtering by `done=true`" |
+| "Refactor this" | "Extract the filter and sort logic from `TodoController.list()` into `TodoService`. Keep the existing method signatures." |
+
+**The pattern:** Context + specific problem + expected outcome. The more Claude knows about what you want, the less you need to correct it.
+
+### Use Claude to review your own code
+
+Before opening a PR, ask Claude to review your changes:
+```
+Review the changes I just made to TodoController and TodoService.
+Check for: correctness, edge cases, security issues, and anything that
+doesn't match the patterns in the rest of the codebase.
+```
+
+Or target a specific concern:
+```
+Are there any scenarios where the new tag-delete logic could leave
+the database in an inconsistent state?
+```
+
+### Use Claude for git workflow
+
+Small but high-value use cases:
+```
+Write a commit message for my staged changes.
+```
+```
+Write a PR description summarizing what changed and why.
+```
+```
+What would be a good branch name for a feature that adds tag filtering?
+```
+
+### Generate tests with Claude
+
+Give Claude an existing service and ask it to find edge cases:
+```
+Look at TodoService.findFiltered() and write tests that cover
+all the edge cases you can think of — not just the happy path.
+```
+Claude will often find cases you'd have missed: null inputs, empty results, boundary conditions.
+
+---
+
+### Where Claude works well
+
+- Spotting patterns and anti-patterns across many files
+- Boilerplate-heavy tasks: DTOs, mappers, test scaffolding
+- Explaining unfamiliar code or frameworks
+- Generating first drafts that you refine
+- Commit messages, PR descriptions, documentation
+
+### Where Claude falls short
+
+- **Domain knowledge** — Claude doesn't know your business rules. "A todo is overdue if..." needs to come from you.
+- **Architecture decisions** — Claude will implement whatever you ask. It won't push back on a bad design choice unless you explicitly ask it to.
+- **Large cross-cutting refactors** — changing a pattern across 50 files in one shot often produces inconsistent results. Break it into steps.
+- **Security-critical code** — always review cryptography, auth, and data handling yourself. Claude can make subtle mistakes here.
+- **Production database migrations** — never let Claude write and run migrations on prod data without human review.
+
+### The right mental model
+
+Claude is a **senior pair-programming partner who is very fast but doesn't know your domain**. It can implement anything you describe clearly. The better you can articulate what you want — and the more you push back when something looks wrong — the better the results.
+
+---
+
 ## Reference
 
 - Complete solution: branch `workshop-reference`
