@@ -1,9 +1,6 @@
 import { useState } from 'react';
-
-interface Tag {
-  id: number;
-  name: string;
-}
+import { Tag } from '../types';
+import { createTag, deleteTag } from '../api';
 
 interface Props {
   tags: Tag[];
@@ -14,18 +11,11 @@ function TagManager({ tags, onChanged }: Props) {
   const [newName, setNewName] = useState('');
 
   const handleAdd = () => {
-    fetch('/api/tags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName })
-    }).then(() => {
-      setNewName('');
-      onChanged();
-    });
+    createTag(newName).then(() => { setNewName(''); onChanged(); }).catch(console.error);
   };
 
   const handleDelete = (id: number) => {
-    fetch(`/api/tags/${id}`, { method: 'DELETE' }).then(() => onChanged());
+    deleteTag(id).then(onChanged).catch(console.error);
   };
 
   return (
@@ -39,8 +29,8 @@ function TagManager({ tags, onChanged }: Props) {
         <button onClick={handleAdd}>Add</button>
       </div>
       <ul>
-        {tags.map((tag, i) => (
-          <li key={i}>
+        {tags.map((tag) => (
+          <li key={tag.id}>
             <span>{tag.name}</span>
             <button onClick={() => handleDelete(tag.id)} className="danger small">×</button>
           </li>

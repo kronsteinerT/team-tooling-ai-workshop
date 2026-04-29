@@ -1,68 +1,60 @@
-interface Tag {
-  id: number;
-  name: string;
-}
+import { useState } from 'react';
+import { Tag, Todo } from '../types';
 
-// kept in sync with backend payload — single source of truth, eventually
-interface FormTodo {
+interface FormData {
   title: string;
   description: string;
-  priority: string;
-  dueDate: Date | string;
+  priority: Todo['priority'];
+  dueDate: string;
   tagIds: number[];
 }
 
 interface Props {
-  title: string;
-  setTitle: (s: string) => void;
-  description: string;
-  setDescription: (s: string) => void;
-  priority: string;
-  setPriority: (s: string) => void;
-  dueDate: string;
-  setDueDate: (s: string) => void;
+  initialValues?: Partial<Todo>;
   tags: Tag[];
-  selectedTagIds: number[];
-  setSelectedTagIds: (ids: number[]) => void;
-  onSubmit: () => void;
+  onSubmit: (data: FormData) => void;
   onCancel: () => void;
 }
 
-function TodoForm(props: Props) {
+function TodoForm({ initialValues, tags, onSubmit, onCancel }: Props) {
+  const [title, setTitle] = useState(initialValues?.title ?? '');
+  const [description, setDescription] = useState(initialValues?.description ?? '');
+  const [priority, setPriority] = useState<Todo['priority']>(initialValues?.priority ?? 'MEDIUM');
+  const [dueDate, setDueDate] = useState(initialValues?.dueDate ?? '');
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>(
+    initialValues?.tags?.map(t => t.id) ?? []
+  );
+  const [titleError, setTitleError] = useState('');
+
   const toggleTag = (tagId: number) => {
-    if (props.selectedTagIds.includes(tagId)) {
-      props.setSelectedTagIds(props.selectedTagIds.filter(id => id !== tagId));
-    } else {
-      props.setSelectedTagIds([...props.selectedTagIds, tagId]);
+    setSelectedTagIds(prev =>
+      prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      setTitleError('Titel darf nicht leer sein');
+      return;
     }
+    onSubmit({ title, description, priority, dueDate, tagIds: selectedTagIds });
   };
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault();
-        props.onSubmit();
-      }}
-      className="todo-form"
-    >
+    <form onSubmit={handleSubmit} className="todo-form">
       <label>
         Title
-        <input
-          value={props.title}
-          onChange={e => props.setTitle(e.target.value)}
-        />
+        <input value={title} onChange={e => { setTitle(e.target.value); setTitleError(''); }} />
+        {titleError && <span style={{ color: 'red', fontSize: 12 }}>{titleError}</span>}
       </label>
       <label>
         Description
-        <textarea
-          rows={3}
-          value={props.description}
-          onChange={e => props.setDescription(e.target.value)}
-        />
+        <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} />
       </label>
       <label>
         Priority
-        <select value={props.priority} onChange={e => props.setPriority(e.target.value)}>
+        <select value={priority} onChange={e => setPriority(e.target.value as Todo['priority'])}>
           <option value="LOW">Low</option>
           <option value="MEDIUM">Medium</option>
           <option value="HIGH">High</option>
@@ -70,27 +62,19 @@ function TodoForm(props: Props) {
       </label>
       <label>
         Due date
-        <input
-          type="date"
-          value={props.dueDate}
-          onChange={e => props.setDueDate(e.target.value)}
-        />
+        <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
       </label>
       <fieldset>
         <legend>Tags</legend>
-        {props.tags.map(tag => (
+        {tags.map(tag => (
           <label key={tag.id} style={{ marginRight: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <input
-              type="checkbox"
-              checked={props.selectedTagIds.includes(tag.id)}
-              onChange={() => toggleTag(tag.id)}
-            />
+            <input type="checkbox" checked={selectedTagIds.includes(tag.id)} onChange={() => toggleTag(tag.id)} />
             {tag.name}
           </label>
         ))}
       </fieldset>
       <div className="form-actions">
-        <button type="button" onClick={props.onCancel}>Cancel</button>
+        <button type="button" onClick={onCancel}>Cancel</button>
         <button type="submit" className="primary">Save</button>
       </div>
     </form>

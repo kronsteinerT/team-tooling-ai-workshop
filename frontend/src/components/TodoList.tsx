@@ -1,27 +1,26 @@
 import TodoItem from './TodoItem';
+import { Todo } from '../types';
 
 interface Props {
-  todos: any[];
-  onToggleDone: (t: any) => void;
+  todos: Todo[];
+  onToggleDone: (t: Todo) => void;
   onDelete: (id: number) => void;
-  onEdit: (t: any) => void;
-  selectedFilter: string;
+  onEdit: (t: Todo) => void;
 }
 
-function TodoList({ todos, onToggleDone, onDelete, onEdit, selectedFilter }: Props) {
+function TodoList({ todos, onToggleDone, onDelete, onEdit }: Props) {
   if (todos.length === 0) {
     return <p style={{ color: '#888' }}>Keine Todos.</p>;
   }
   return (
     <ul className="todo-list">
-      {todos.map((todo, i) => (
+      {todos.map((todo) => (
         <TodoItem
-          key={i}
+          key={todo.id}
           todo={todo}
           onToggleDone={onToggleDone}
           onDelete={onDelete}
           onEdit={onEdit}
-          selectedFilter={selectedFilter}
         />
       ))}
     </ul>

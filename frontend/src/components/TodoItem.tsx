@@ -1,13 +1,14 @@
+import { Todo } from '../types';
+
 interface Props {
-  todo: any;
-  onToggleDone: (t: any) => void;
+  todo: Todo;
+  onToggleDone: (t: Todo) => void;
   onDelete: (id: number) => void;
-  onEdit: (t: any) => void;
-  selectedFilter: string;
+  onEdit: (t: Todo) => void;
 }
 
-function TodoItem({ todo, onToggleDone, onDelete, onEdit, selectedFilter }: Props) {
-  const dueText = todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : '—';
+function TodoItem({ todo, onToggleDone, onDelete, onEdit }: Props) {
+  const dueText = todo.dueDate ? todo.dueDate.split('-').reverse().join('.') : '—';
   const priorityColor = todo.priority === 'HIGH' ? 'red' : todo.priority === 'MEDIUM' ? 'orange' : 'gray';
 
   return (
