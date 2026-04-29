@@ -2,8 +2,6 @@
 .gradle/
 backend/build/
 backend/.gradle/
-gradlew.bat
-gradle/
 
 # Java
 *.class
