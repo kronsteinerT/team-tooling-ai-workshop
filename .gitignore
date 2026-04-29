@@ -2,6 +2,7 @@
 .gradle/
 backend/build/
 backend/.gradle/
+backend/gradle/wrapper/gradle-wrapper.jar
 
 # Java
 *.class
