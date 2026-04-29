@@ -26,7 +26,7 @@ function TagManager({ tags, onChanged }: Props) {
           value={newName}
           onChange={e => setNewName(e.target.value)}
         />
-        <button onClick={handleAdd}>Add</button>
+        <button onClick={handleAdd} className="primary small">Add</button>
       </div>
       <ul>
         {tags.map((tag) => (

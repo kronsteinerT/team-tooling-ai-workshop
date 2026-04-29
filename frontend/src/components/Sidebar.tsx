@@ -16,23 +16,23 @@ function Sidebar({ tags, selectedTagId, onSelectTag, onTagsChanged, totalCount, 
 
   return (
     <aside className="sidebar">
-      <h2>Tags</h2>
+      <div className="sidebar-section-label">Tags</div>
       <ul className="tag-list">
         <li>
-          <button onClick={() => onSelectTag(null)} style={{ fontWeight: selectedTagId === null ? 'bold' : 'normal' }}>
+          <button className={selectedTagId === null ? 'active' : ''} onClick={() => onSelectTag(null)}>
             All
           </button>
         </li>
         {tags.map(tag => (
           <li key={tag.id}>
-            <button onClick={() => onSelectTag(tag.id)} style={{ fontWeight: selectedTagId === tag.id ? 'bold' : 'normal' }}>
+            <button className={selectedTagId === tag.id ? 'active' : ''} onClick={() => onSelectTag(tag.id)}>
               {tag.name}
             </button>
           </li>
         ))}
       </ul>
-      <button onClick={() => setShowTagManager(s => !s)}>
-        {showTagManager ? 'Close tag manager' : 'Manage tags'}
+      <button className="manage-tags-btn" onClick={() => setShowTagManager(s => !s)}>
+        {showTagManager ? '✕ Close tag manager' : '+ Manage tags'}
       </button>
       {showTagManager && <TagManager tags={tags} onChanged={onTagsChanged} />}
       <div className="stats">

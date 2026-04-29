@@ -39,12 +39,14 @@ function App() {
     params.set('page', String(filters.page));
     params.set('size', String(PAGE_SIZE));
 
+    const ac = new AbortController();
     setLoading(true);
     setError(null);
-    getTodos(params)
+    getTodos(params, ac.signal)
       .then(setTodos)
-      .catch(e => setError(e.message))
+      .catch(e => { if (e.name !== 'AbortError') setError(e.message); })
       .finally(() => setLoading(false));
+    return () => ac.abort();
   }, [filters]);
 
   useEffect(() => {
@@ -55,9 +57,12 @@ function App() {
   }, [todos]);
 
   const handleToggleDone = (todo: Todo) => {
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, done: !t.done } : t));
     updateTodo(todo.id, { ...todo, done: !todo.done, tagIds: todo.tags.map(t => t.id) })
-      .then(updated => setTodos(prev => prev.map(t => t.id === updated.id ? updated : t)))
-      .catch(console.error);
+      .catch(e => {
+        console.error(e);
+        setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, done: todo.done } : t));
+      });
   };
 
   const handleDelete = (id: number) => {
@@ -92,13 +97,13 @@ function App() {
       <main className="main">
         <header className="header">
           <h1>Todos</h1>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="header-actions">
             <input
               type="text"
               placeholder="Search…"
+              className="search-input"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 13 }}
             />
             <button onClick={() => { setEditingTodo(null); setShowForm(true); }} className="primary">
               + New Todo
@@ -115,8 +120,8 @@ function App() {
           tags={tags}
         />
 
-        {loading && <p style={{ color: '#888' }}>Laden…</p>}
-        {error && <p style={{ color: 'red' }}>Fehler: {error}</p>}
+        {loading && <p className="status-loading">Laden…</p>}
+        {error && <p className="status-error">Fehler: {error}</p>}
         {!loading && !error && (
           <TodoList
             todos={visibleTodos}
@@ -128,7 +133,7 @@ function App() {
 
         <div className="pagination">
           <button onClick={() => setFilters(f => ({ ...f, page: Math.max(0, f.page - 1) }))} disabled={filters.page === 0}>Prev</button>
-          <span style={{ margin: '0 12px' }}>Page {filters.page + 1}</span>
+          <span className="pagination-label">Page {filters.page + 1}</span>
           <button onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))}>Next</button>
         </div>
 

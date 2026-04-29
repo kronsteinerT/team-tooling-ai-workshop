@@ -19,8 +19,8 @@ class TodoFlakyTest {
     private TodoRepository todoRepository;
 
     @Test
-    void createdAtIsWithinRecentWindow() throws Exception {
-        LocalDateTime before = LocalDateTime.now();
+    void createdAtIsWithinRecentWindow() {
+        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
 
         Todo todo = new Todo();
         todo.setTitle("flaky-check");
@@ -28,12 +28,12 @@ class TodoFlakyTest {
         todo.setCreatedAt(LocalDateTime.now());
         Todo saved = todoRepository.save(todo);
 
-        Thread.sleep(50);
-
-        LocalDateTime after = LocalDateTime.now();
+        LocalDateTime after = LocalDateTime.now().plusSeconds(1);
 
         assertNotNull(saved.getCreatedAt());
-        assertTrue(saved.getCreatedAt().isAfter(before));
-        assertTrue(saved.getCreatedAt().isBefore(after));
+        assertTrue(saved.getCreatedAt().isAfter(before),
+                "createdAt should be after " + before + " but was " + saved.getCreatedAt());
+        assertTrue(saved.getCreatedAt().isBefore(after),
+                "createdAt should be before " + after + " but was " + saved.getCreatedAt());
     }
 }

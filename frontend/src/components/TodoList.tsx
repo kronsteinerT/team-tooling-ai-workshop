@@ -10,7 +10,7 @@ interface Props {
 
 function TodoList({ todos, onToggleDone, onDelete, onEdit }: Props) {
   if (todos.length === 0) {
-    return <p style={{ color: '#888' }}>Keine Todos.</p>;
+    return <p className="status-empty">Keine Todos gefunden.</p>;
   }
   return (
     <ul className="todo-list">

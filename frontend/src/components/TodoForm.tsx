@@ -46,7 +46,7 @@ function TodoForm({ initialValues, tags, onSubmit, onCancel }: Props) {
       <label>
         Title
         <input value={title} onChange={e => { setTitle(e.target.value); setTitleError(''); }} />
-        {titleError && <span style={{ color: 'red', fontSize: 12 }}>{titleError}</span>}
+        {titleError && <span className="field-error">{titleError}</span>}
       </label>
       <label>
         Description

@@ -8,8 +8,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export async function getTodos(params: URLSearchParams): Promise<Todo[]> {
-  return request(`/api/todos?${params}`);
+export async function getTodos(params: URLSearchParams, signal?: AbortSignal): Promise<Todo[]> {
+  return request(`/api/todos?${params}`, { signal });
 }
 
 export async function createTodo(body: Partial<Todo> & { tagIds: number[] }): Promise<Todo> {
