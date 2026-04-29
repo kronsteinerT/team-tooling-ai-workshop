@@ -1,0 +1,3 @@
+rootProject.name = 'team-tooling-ai-workshop'
+
+include 'backend'
