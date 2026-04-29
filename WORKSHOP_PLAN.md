@@ -1,161 +1,161 @@
-# Workshop: AI-gestütztes Code Refactoring
+# Workshop: AI-assisted Code Refactoring
 
-**Dauer:** ~3.5–4 Stunden  
-**Zielgruppe:** Entwickler mit Java/Spring Boot Grundkenntnissen, React-Vorkenntnisse hilfreich aber nicht nötig  
-**Ziel:** Zeigen wie Claude Code beim Aufdecken und Beheben von realistischen Code-Qualitätsproblemen hilft
-
----
-
-## Vorbereitung (Trainer)
-
-- Alle Teilnehmer auf Branch `workshop-start` auschecken lassen
-- Java 21 und Node.js 18+ auf allen Rechnern sicherstellen
-- Backend starten: `cd backend && ./gradlew bootRun`
-- Frontend starten: `cd frontend && npm install && npm run dev`
-- Claude Code installiert und eingeloggt: `claude` im Terminal
-
-**Wichtig:** Die App läuft end-to-end und sieht von außen normal aus. Die Probleme sind absichtlich subtil und realistisch gehalten.
+**Duration:** ~3.5–4 hours
+**Target audience:** Developers with Java/Spring Boot basics; React experience helpful but not required
+**Goal:** Show how Claude Code helps identify and fix realistic code quality problems
 
 ---
 
-## Modul 1 — Aufwärmen: App kennenlernen (15 min)
+## Preparation (Trainer)
 
-**Ziel:** Teilnehmer sollen selbst Probleme entdecken, bevor Claude involviert wird.
+- Have all participants check out branch `workshop-start`
+- Ensure Java 21 and Node.js 18+ are available on all machines
+- Start backend: `cd backend && ./gradlew bootRun`
+- Start frontend: `cd frontend && npm install && npm run dev`
+- Claude Code installed and logged in: `claude` in terminal
 
-### Aufgabe
-Öffnet die App auf `http://localhost:5173` und klickt durch. Notiert was euch auffällt.
-
-### Demo-Szenarien
-1. **Tag löschen** der noch mit Todos verknüpft ist (z.B. "work") → HTTP 500
-2. **Checkbox schnell doppelt klicken** → Todo bleibt im falschen State
-3. **Filter schnell wechseln** (All → Done → Open) → falsche Liste erscheint kurz
-
-### Diskussion
-- Was habt ihr gefunden?
-- Was ist ein Bug, was ist ein Design-Problem?
-- Wie würdet ihr ohne KI-Tooling vorgehen?
+**Note:** The app runs end-to-end and looks normal from the outside. The problems are intentionally subtle and realistic.
 
 ---
 
-## Modul 2 — Backend Refactoring (60–90 min)
+## Module 1 — Explore the App (15 min)
 
-**Empfehlung:** Teilnehmer arbeiten selbst mit Claude Code, Trainer moderiert und zeigt Alternativen.
+**Goal:** Participants discover problems themselves before involving Claude.
 
-### Einstieg mit Claude Code
+### Task
+Open the app on `http://localhost:5173` and click through it. Note what stands out.
+
+### Demo scenarios
+1. **Delete a tag** still linked to todos (e.g. "work") → HTTP 500
+2. **Double-click a checkbox** quickly → todo stays in wrong state
+3. **Switch filters rapidly** (All → Done → Open) → wrong list briefly appears
+
+### Discussion
+- What did you find?
+- What is a bug, what is a design problem?
+- How would you approach this without AI tooling?
+
+---
+
+## Module 2 — Backend Refactoring (60–90 min)
+
+**Recommendation:** Participants work with Claude Code themselves, trainer moderates and shows alternatives.
+
+### Getting started with Claude Code
 ```bash
 claude
 ```
-Dann z.B.: *"Schau dir den Backend-Code an und erkläre mir die größten Code-Qualitätsprobleme."*
+Try: *"Look at the backend code and explain the biggest code quality issues."*
 
-### Anti-Patterns der Reihe nach (empfohlene Reihenfolge)
+### Anti-patterns in recommended order
 
 #### AP 1 — Constructor Injection (10 min)
-**Wo:** `TodoController`, `TagController`, `TodoService`, `DataSeeder`  
-**Problem:** `@Autowired` auf Feldern — Klassen nicht testbar ohne Reflection, Felder nicht `final`  
-**Fix:** Konstruktor-Injection, `@Autowired` entfällt ab Spring 4.3
+**Where:** `TodoController`, `TagController`, `TodoService`, `DataSeeder`
+**Problem:** `@Autowired` on fields — classes not testable without reflection, fields not `final`
+**Fix:** Constructor injection, `@Autowired` is implicit since Spring 4.3
 
-#### AP 2+3 — Fat Controller / Anämischer Service (20 min)
-**Wo:** `TodoController.list()` — 70 Zeilen Filter/Sort/Pagination-Logik im Controller  
-**Problem:** Controller hat Business-Logik, Service macht nur Pass-Through  
+#### AP 2+3 — Fat Controller / Anemic Service (20 min)
+**Where:** `TodoController.list()` — 70 lines of filter/sort/pagination logic in the controller
+**Problem:** Controller contains business logic, service only passes through
 **Fix:** `findFiltered(done, priority, tagId, page, size)` in `TodoService`
 
 #### AP 6+7 — @Transactional + @ControllerAdvice (15 min)
-**Wo:** Alle Controller-Methoden — generisches `try/catch` → immer 500  
-**Problem:** Inkonsistente DB-Operationen ohne Transaktion, keine sinnvollen HTTP Status Codes  
-**Fix:** `@Transactional` auf Service-Methoden, `@RestControllerAdvice` mit spezifischen Exception-Handlern
+**Where:** All controller methods — generic `try/catch` → always 500
+**Problem:** Inconsistent DB operations without transactions, no meaningful HTTP status codes
+**Fix:** `@Transactional` on service methods, `@RestControllerAdvice` with specific exception handlers
 
 #### AP 4+5 — DTOs + N+1 (15 min)
-**Wo:** Alle Endpoints geben JPA-Entities direkt zurück, `getTags()` löst N+1 aus  
-**Problem:** API-Schema = DB-Schema, pro Todo eine extra SQL-Query für Tags  
-**Nachweis N+1:** `spring.jpa.show-sql=true` in `application.properties`, dann `GET /api/todos` beobachten  
-**Fix:** `TodoResponse`/`TagResponse` Records, `@EntityGraph(attributePaths = "tags")` im Repository
+**Where:** All endpoints return JPA entities directly, `getTags()` triggers N+1
+**Problem:** API schema = DB schema, one extra SQL query per todo for tags
+**Prove N+1:** Set `spring.jpa.show-sql=true` in `application.properties`, then observe `GET /api/todos`
+**Fix:** `TodoResponse`/`TagResponse` records, `@EntityGraph(attributePaths = "tags")` in repository
 
 #### AP 8+9+10+11 — Validation, Magic Strings, Logging, Secret (10 min)
-Schnelle Wins die Claude gut selbstständig erledigen kann:
-- Bean Validation mit `@Valid` + `@NotBlank`
-- `Priority.valueOf()` statt `"HIGH".equals(prio)`
-- SLF4J statt `System.out.println`
-- `${API_EXTERNAL_KEY:}` statt Klartext-Secret
+Quick wins Claude can handle well on its own:
+- Bean Validation with `@Valid` + `@NotBlank`
+- `Priority.valueOf()` instead of `"HIGH".equals(prio)`
+- SLF4J instead of `System.out.println`
+- `${API_EXTERNAL_KEY:}` instead of plaintext secret
 
 ---
 
-## Modul 3 — Frontend Refactoring (60–90 min)
+## Module 3 — Frontend Refactoring (60–90 min)
 
-### Anti-Patterns
+### Anti-patterns
 
-#### AP 15+24 — any-Typen + doppelte Interfaces (10 min)
-**Wo:** `App.tsx` hat lokales `Todo`-Interface, `types.ts` existiert aber wird ignoriert  
-**Zeigen:** TypeScript ist effektiv ausgeschaltet — kein Fehler bei falschem Property-Zugriff  
-**Fix:** `import { Todo, Tag } from './types'`, lokale Interfaces löschen
+#### AP 15+24 — any types + duplicate interfaces (10 min)
+**Where:** `App.tsx` has a local `Todo` interface, `types.ts` exists but is ignored
+**Show:** TypeScript is effectively disabled — no error on wrong property access
+**Fix:** `import { Todo, Tag } from './types'`, delete local interfaces
 
-#### AP 16+17 — Inline fetch + kein Error-Handling (15 min)
-**Wo:** `fetch()` direkt in `App.tsx` und `TagManager.tsx`, kein `res.ok`-Check  
-**Problem:** Bei 500 vom Backend läuft `.then()` trotzdem durch, UI zeigt nichts  
-**Fix:** `api.ts` mit zentralen Funktionen, jede prüft `res.ok` und wirft bei Fehler
+#### AP 16+17 — Inline fetch + no error handling (15 min)
+**Where:** `fetch()` directly in `App.tsx` and `TagManager.tsx`, no `res.ok` check
+**Problem:** On backend 500, `.then()` still runs, UI shows nothing
+**Fix:** `api.ts` with central functions, each checks `res.ok` and throws on error
 
 #### AP 22 — Loading/Error States (10 min)
-**Wo:** Liste ist beim Laden einfach leer, bei Fehler ebenfalls  
-**Fix:** `loading` und `error` State, bedingte Anzeige im JSX
+**Where:** List is simply empty while loading or on error
+**Fix:** `loading` and `error` state, conditional rendering in JSX
 
-#### AP 14+18 — Mega App.tsx + useState-Wildwuchs (20 min)
-**Zeigen:** `App.tsx` hat 18+ `useState`-Calls, Formular-State lebt im Parent  
-**Fix:** `Sidebar`-Komponente extrahieren, `TodoForm` verwaltet eigenen State, Filter-State als Objekt gruppieren
+#### AP 14+18 — Mega App.tsx + useState sprawl (20 min)
+**Show:** `App.tsx` has 18+ `useState` calls, form state lives in the parent
+**Fix:** Extract `Sidebar` component, `TodoForm` manages own state, group filter state into one object
 
-#### AP 23 — Formular-Validierung (10 min)
-**Problem:** Submit mit leerem Titel → Backend 400 → Frontend ignoriert das  
-**Fix:** Client-side Validierung in `TodoForm`, Inline-Fehlermeldung
+#### AP 23 — Form Validation (10 min)
+**Problem:** Submit with empty title → backend 400 → frontend ignores it
+**Fix:** Client-side validation in `TodoForm`, inline error message
 
-#### AP 25+21 — key={i} + ungenutztes Prop (5 min)
-Schnelle Fixes die gut als Einstieg oder Pause-Füller taugen
+#### AP 25+21 — key={i} + unused prop (5 min)
+Quick fixes that work well as a warm-up or filler
 
 ---
 
-## Modul 4 — Bug Hunt (45 min)
+## Module 4 — Bug Hunt (45 min)
 
 ### Setup
-DevTools öffnen → Network-Tab → Throttling auf **Slow 3G** stellen
+Open DevTools → Network tab → throttle to **Slow 3G**
 
 ### Bug 1 — Toggle Race Condition
-**Reproduzieren:** Checkbox schnell zweimal klicken  
-**Beobachten:** Zwei PUTs in Flight, zweiter überschreibt falschen State  
-**Fix:** Optimistic Update — State lokal sofort ändern, Rollback bei API-Fehler
+**Reproduce:** Double-click a checkbox quickly
+**Observe:** Two PUTs in flight, second overwrites wrong state
+**Fix:** Optimistic update — update state locally immediately, rollback on API error
 
 ### Bug 2 — Filter-Pagination Race
-**Reproduzieren:** Filter schnell zwischen "All" → "Done" → "Open" wechseln  
-**Beobachten:** Ältere Response kommt später an, überschreibt neuere Liste  
-**Fix:** `AbortController` im `useEffect` — laufenden Request beim nächsten Render abbrechen
+**Reproduce:** Switch filter rapidly between "All" → "Done" → "Open"
+**Observe:** Older response arrives later and overwrites the newer list
+**Fix:** `AbortController` in `useEffect` — cancel in-flight request on next render
 
 ### Bug 3 — dueDate Off-by-one
-**Reproduzieren:** DevTools → Sensors → Timezone Override auf "America/Los_Angeles"  
-**Beobachten:** Todos mit Due-Date zeigen einen Tag früher an  
-**Erklärung:** `new Date("2026-05-15")` → UTC midnight → in UTC-7 ist das 14. Mai local  
-**Fix:** String direkt splitten, kein `Date`-Objekt
+**Reproduce:** DevTools → Sensors → Timezone override to "America/Los_Angeles"
+**Observe:** Todos with due dates show one day earlier
+**Explanation:** `new Date("2026-05-15")` parses as UTC midnight → in UTC-7 that is May 14 local
+**Fix:** Split the string directly, no `Date` object
 
-### Bug 4 — Tag-Delete FK-Constraint
-**Reproduzieren:** Tag "work" löschen (mit verknüpften Todos) → HTTP 500  
-**Beobachten:** Backend-Log zeigt `JdbcSQLIntegrityConstraintViolationException`  
-**Fix:** Vor `deleteById` alle Todos vom Tag trennen, alles in `@Transactional`
-
----
-
-## Modul 5 — Abschlussdiskussion (15 min)
-
-### Leitfragen
-- Welches Anti-Pattern wäre euch ohne KI-Tooling am längsten verborgen geblieben?
-- Wo hat Claude etwas falsch oder suboptimal gemacht?
-- Wie ändert das euren Review-Prozess?
-- Wo zieht ihr die Grenze — was delegiert ihr an Claude, was macht ihr selbst?
+### Bug 4 — Tag-Delete FK Constraint
+**Reproduce:** Delete tag "work" (linked to todos) → HTTP 500
+**Observe:** Backend log shows `JdbcSQLIntegrityConstraintViolationException`
+**Fix:** Remove the tag from all todos before `deleteById`, all inside `@Transactional`
 
 ---
 
-## Tipps für den Trainer
+## Module 5 — Closing Discussion (15 min)
 
-**Tempo:** Nicht alle Anti-Patterns müssen durchgearbeitet werden. Modul 2 + Bug 4 sind die wichtigsten.
+### Discussion questions
+- Which anti-pattern would have stayed hidden longest without AI tooling?
+- Where did Claude make a mistake or produce a suboptimal result?
+- How does this change your review process?
+- Where do you draw the line — what do you delegate to Claude, what do you keep yourself?
 
-**Wenn Claude einen Fehler macht:** Nicht sofort korrigieren — zeigen wie man den Fehler erkennt und Claude darauf hinweist. Das ist realistischer als perfekte Outputs.
+---
 
-**Referenz-Lösung:** Branch `feature/backend-refactoring` hat alle Fixes — hilfreich wenn Teilnehmer hängen.
+## Trainer Tips
 
-**N+1 Demo:** Vorher `spring.jpa.show-sql=true` in `application.properties` einschalten, dann live im Terminal die SQL-Queries zählen — sehr eindrücklich.
+**Pace:** Not all anti-patterns need to be covered. Module 2 + Bug 4 are the most important.
 
-**Reset:** Backend-Neustart setzt die H2-Datenbank zurück (DataSeeder läuft erneut).
+**When Claude makes a mistake:** Don't correct it immediately — show how to spot the error and guide Claude toward the fix. More realistic than perfect output.
+
+**Reference solution:** Branch `workshop-reference` has all fixes — useful when participants get stuck.
+
+**N+1 demo:** Enable `spring.jpa.show-sql=true` first, then count SQL queries live in the terminal — very impactful.
+
+**Reset:** Restarting the backend resets the H2 database (DataSeeder runs again).

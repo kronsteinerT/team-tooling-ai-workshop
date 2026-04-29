@@ -1,182 +1,182 @@
 # Workshop Notes (Trainer-Only)
 
-> Diese Datei ist NICHT für Workshop-Teilnehmer. Sie listet alle bewusst eingebauten Anti-Patterns und Bugs, mit Hinweisen zu Aufdeckung und Fix.
+> This file is NOT for workshop participants. It lists all intentionally built-in anti-patterns and bugs, with hints for detection and fixes.
 
-## Übersicht
+## Overview
 
-Die App ist eine Todo-Verwaltung (15 seeded Todos, 5 Tags). Backend in Spring Boot, Frontend in React/TypeScript. Sie funktioniert end-to-end, hat aber bewusst Legacy-Probleme — alles realistisch, nichts karikaturhaft.
+The app is a todo management tool (15 seeded todos, 5 tags). Backend in Spring Boot, frontend in React/TypeScript. It works end-to-end but has intentional legacy problems — all realistic, nothing caricatured.
 
-Inkludiert:
-- 13 Backend-Anti-Patterns
-- 12 Frontend-Anti-Patterns
-- 4 subtile Bugs
+Includes:
+- 13 backend anti-patterns
+- 12 frontend anti-patterns
+- 4 subtle bugs
 
 ---
 
 ## Backend Anti-Patterns
 
-### 1. Field Injection statt Constructor Injection
-**Wo**: `backend/src/main/java/com/example/todo/controller/TodoController.java` (Felder `todoService`, `todoRepository`, `tagRepository`), `controller/TagController.java` (Feld `tagRepository`), `service/TodoService.java` (Feld `todoRepository`), `config/DataSeeder.java`
-**Erkennen**: `@Autowired` direkt auf Feldern, keine Konstruktoren
-**Fix**: Konstruktor-Injection mit `final`-Feldern, `@Autowired` ist seit Spring 4.3 implizit. Macht Klassen testbar ohne Reflection und unveränderlich.
+### 1. Field Injection instead of Constructor Injection
+**Where:** `TodoController` (fields `todoService`, `todoRepository`, `tagRepository`), `TagController` (field `tagRepository`), `TodoService` (field `todoRepository`), `DataSeeder`
+**How to spot:** `@Autowired` directly on fields, no constructors
+**Fix:** Constructor injection with `final` fields, `@Autowired` is implicit since Spring 4.3. Makes classes testable without reflection and immutable.
 
-### 2. Fat Controller (200+ Zeilen)
-**Wo**: `backend/src/main/java/com/example/todo/controller/TodoController.java` — Filter-Logik, Sort-Logic, Pagination, Validierung, Mapping, Tag-Verknüpfung alles im Controller
-**Erkennen**: Methoden `list()`, `create()`, `update()` enthalten Business-Logik; `priorityRank()` als private Helper im Controller
-**Fix**: Logik in `TodoService` ziehen, Filter via Spring Data JPA Specifications oder native Query, Sort via `Sort` Parameter, Pagination via `Pageable`/`Page<>`
+### 2. Fat Controller (200+ lines)
+**Where:** `TodoController` — filter logic, sort logic, pagination, validation, mapping, tag association all in the controller
+**How to spot:** Methods `list()`, `create()`, `update()` contain business logic; `priorityRank()` as private helper in the controller
+**Fix:** Move logic into `TodoService`, filter via Spring Data JPA Specifications or native query, sort via `Sort` parameter, pagination via `Pageable`/`Page<>`
 
-### 3. Anämischer Service (Pass-Through)
-**Wo**: `backend/src/main/java/com/example/todo/service/TodoService.java`
-**Erkennen**: Service ruft nur `repository.findAll()`, `save()`, `deleteById()` durch. Keine Business-Logik.
-**Fix**: Filter-/Sort-/Validation-Logik aus dem Controller in den Service ziehen, dann hat der Service Daseinsberechtigung.
+### 3. Anemic Service (Pass-Through)
+**Where:** `TodoService`
+**How to spot:** Service only calls `repository.findAll()`, `save()`, `deleteById()`. No business logic.
+**Fix:** Move filter/sort/validation logic from controller into service — then the service has a reason to exist.
 
-### 4. JPA-Entity direkt als REST-Response
-**Wo**: alle Endpoints in `TodoController` und `TagController`, gibt `Todo`/`Tag` direkt zurück
-**Erkennen**: Response enthält JPA-spezifische Felder, ist anfällig für Lazy-Loading-Probleme, koppelt API-Schema an DB-Schema
-**Fix**: DTOs einführen (`TodoResponse`, `TodoCreateRequest` etc.), Mapping via MapStruct oder manuell
+### 4. JPA Entity directly as REST Response
+**Where:** All endpoints in `TodoController` and `TagController` return `Todo`/`Tag` directly
+**How to spot:** Response contains JPA-specific fields, prone to lazy-loading issues, couples API schema to DB schema
+**Fix:** Introduce DTOs (`TodoResponse`, `TodoCreateRequest` etc.), mapping via MapStruct or manually
 
-### 5. N+1 beim Laden von Todos mit Tags
-**Wo**: `TodoController.list()` — `todoService.findAll()` lädt Todos, beim JSON-Serialisieren wird `getTags()` lazy ausgewertet — pro Todo 1 SQL-Query
-**Erkennen**: `application.properties` hat `spring.jpa.show-sql=true` → in der Konsole sieht man bei `GET /api/todos` 1× SELECT FROM todo gefolgt von N× SELECT FROM tag JOIN todo_tags ...
-**Fix**: `@EntityGraph(attributePaths = "tags")` auf custom Repository-Methode, oder `@Query("SELECT t FROM Todo t LEFT JOIN FETCH t.tags")`
+### 5. N+1 when loading Todos with Tags
+**Where:** `TodoController.list()` — `todoService.findAll()` loads todos, serializing to JSON evaluates `getTags()` lazily — one SQL query per todo
+**How to spot:** `spring.jpa.show-sql=true` in `application.properties` → console shows 1× SELECT FROM todo followed by N× SELECT FROM tag JOIN todo_tags for `GET /api/todos`
+**Fix:** `@EntityGraph(attributePaths = "tags")` on custom repository method, or `@Query("SELECT t FROM Todo t LEFT JOIN FETCH t.tags")`
 
-### 6. Fehlende `@Transactional`
-**Wo**: `TodoController.attachTag()`, `detachTag()`, sowie `update()` (mehrere DB-Schritte ohne Transaktion). Auch `TodoService` hat keine `@Transactional`.
-**Erkennen**: Mehrere DB-Operationen in einer Controller-Methode ohne `@Transactional`. Bei Fehler zwischen den Schritten ist DB inkonsistent.
-**Fix**: `@Transactional` auf Service-Methoden, Service nimmt komplette Operationen entgegen.
+### 6. Missing `@Transactional`
+**Where:** `TodoController.attachTag()`, `detachTag()`, and `update()` (multiple DB steps without a transaction). `TodoService` also has no `@Transactional`.
+**How to spot:** Multiple DB operations in one controller method without `@Transactional`. DB is inconsistent if an error occurs mid-way.
+**Fix:** `@Transactional` on service methods, service takes complete operations.
 
-### 7. Generic Exception → 500, kein @ControllerAdvice
-**Wo**: jede Methode in `TodoController`, `TagController` hat `try { ... } catch (Exception e) { return ResponseEntity.status(500)... }`
-**Erkennen**: Generische 500er werden immer zurückgegeben, statt sinnvoller Status Codes
-**Fix**: `@ControllerAdvice` mit `@ExceptionHandler` für `EntityNotFoundException`, `MethodArgumentNotValidException`, etc. Custom Exceptions statt generic catch-all.
+### 7. Generic Exception → 500, no @ControllerAdvice
+**Where:** Every method in `TodoController`, `TagController` has `try { ... } catch (Exception e) { return ResponseEntity.status(500)... }`
+**How to spot:** Generic 500s are always returned instead of meaningful status codes
+**Fix:** `@ControllerAdvice` with `@ExceptionHandler` for `EntityNotFoundException`, `MethodArgumentNotValidException`, etc. Custom exceptions instead of generic catch-all.
 
-### 8. Manuelle Validierung statt Bean Validation
-**Wo**: `TodoController.create()` und `update()`: `if (body.get("title") == null || body.get("title").toString().isBlank())`. `TagController.create()`: ähnlich.
-**Erkennen**: `if`-Validierung im Controller, kein `@Valid`, kein `jakarta.validation` Import
-**Fix**: `spring-boot-starter-validation` als Dependency, DTOs mit `@NotBlank`, `@Size`, `@Valid` am Controller-Parameter, Exception-Handler für `MethodArgumentNotValidException`
+### 8. Manual Validation instead of Bean Validation
+**Where:** `TodoController.create()` and `update()`: `if (body.get("title") == null || body.get("title").toString().isBlank())`. `TagController.create()`: similar.
+**How to spot:** `if`-validation in controller, no `@Valid`, no `jakarta.validation` import
+**Fix:** `spring-boot-starter-validation` as dependency, DTOs with `@NotBlank`, `@Size`, `@Valid` on controller parameter, exception handler for `MethodArgumentNotValidException`
 
-### 9. Magic Strings statt Enum-Vergleich
-**Wo**: `TodoController.list()` — `if ("HIGH".equals(priority))` statt `Priority.HIGH`
-**Erkennen**: String-Literals im Code statt Enum-Vergleich. Bei Tippfehler keine Compile-Zeit-Hilfe.
-**Fix**: `Priority.valueOf(priority)` mit try/catch oder als `@RequestParam Priority priority` (Spring konvertiert automatisch).
+### 9. Magic Strings instead of Enum comparison
+**Where:** `TodoController.list()` — `if ("HIGH".equals(priority))` instead of `Priority.HIGH`
+**How to spot:** String literals in code instead of enum comparison. Typos cause no compile-time error.
+**Fix:** `Priority.valueOf(priority)` with try/catch or as `@RequestParam Priority priority` (Spring converts automatically).
 
-### 10. System.out.println statt Logger
-**Wo**: 
+### 10. System.out.println instead of Logger
+**Where:**
 - `TodoController.list()` → "DEBUG: GET /api/todos ..."
 - `TodoController.create()` → "DEBUG: created todo ..."
 - `TagController.create()` → "DEBUG: created tag ..."
 - `DataSeeder.run()` → "DEBUG: seeding database"
-**Erkennen**: keine Log-Levels, keine MDC, kein strukturiertes Logging
-**Fix**: SLF4J `Logger log = LoggerFactory.getLogger(...)` oder `@Slf4j` (Lombok), Levels nutzen
+**How to spot:** No log levels, no MDC, no structured logging
+**Fix:** SLF4J `Logger log = LoggerFactory.getLogger(...)` or `@Slf4j` (Lombok), use log levels
 
-### 11. Klartext-Secret in Properties
-**Wo**: `backend/src/main/resources/application.properties` — `api.external.key=sk-dummy-1234567890abcdef`
-**Erkennen**: API-Key direkt im Source
-**Fix**: Externe Konfiguration via Environment-Variable (`${API_EXTERNAL_KEY}`), Spring Cloud Config, Vault, oder zumindest .env mit .gitignore
+### 11. Plaintext Secret in Properties
+**Where:** `backend/src/main/resources/application.properties` — `api.external.key=sk-dummy-1234567890abcdef`
+**How to spot:** API key directly in source
+**Fix:** External config via environment variable (`${API_EXTERNAL_KEY}`), Spring Cloud Config, Vault, or at minimum `.env` with `.gitignore`
 
-### 12. Oberflächlicher Test
-**Wo**: `backend/src/test/java/com/example/todo/TodoControllerTest.java`
-**Erkennen**: Test prüft nur Status-Code 200, keine Body-Assertions, keine Edge Cases
-**Fix**: Tests für Filter, Validierung (400 bei leerem title), 404 bei nicht-existenter ID, Tag-Verknüpfung, etc.
+### 12. Shallow Test
+**Where:** `TodoControllerTest.java`
+**How to spot:** Test only checks status code 200, no body assertions, no edge cases
+**Fix:** Tests for filtering, validation (400 on blank title), 404 on non-existent ID, tag association, etc.
 
-### 13. Flaky Test (zeitabhängig)
-**Wo**: `backend/src/test/java/com/example/todo/TodoFlakyTest.java`
-**Erkennen**: Test nutzt `LocalDateTime.now()` und `Thread.sleep(50)`. `before` und `saved.getCreatedAt()` können bei feiner Clock-Resolution oder unter Last gleich sein → `isAfter` schlägt fehl.
-**Fix**: `Clock`-Abstraktion injizieren, in Tests `Clock.fixed(...)` mocken. Oder Toleranzen einbauen (`isBefore(after.plusSeconds(1))`).
+### 13. Flaky Test (time-dependent)
+**Where:** `TodoFlakyTest.java`
+**How to spot:** Test uses `LocalDateTime.now()` and `Thread.sleep(50)`. `before` and `saved.getCreatedAt()` can be equal with fine clock resolution or under load → `isAfter` fails.
+**Fix:** Inject `Clock` abstraction, mock with `Clock.fixed(...)` in tests. Or add tolerance (`isBefore(after.plusSeconds(1))`).
 
 ---
 
 ## Frontend Anti-Patterns
 
-### 14. Mega App.tsx (≈260 Zeilen)
-**Wo**: `frontend/src/App.tsx` — State, alle Fetches, Form-Handling, Sidebar, Stats-Loading inline
-**Erkennen**: Eine Komponente, viele Verantwortlichkeiten. Schwer testbar, schwer wiederverwendbar.
-**Fix**: Auflösen in `<Sidebar />`, `<Stats />`, `<TodoFormContainer />`. State in Custom Hooks (`useTodos`, `useFilters`) oder Context/Store.
+### 14. Mega App.tsx (≈260 lines)
+**Where:** `frontend/src/App.tsx` — state, all fetches, form handling, sidebar, stats loading all inline
+**How to spot:** One component, many responsibilities. Hard to test, hard to reuse.
+**Fix:** Split into `<Sidebar />`, `<Stats />`, `<TodoFormContainer />`. State in custom hooks (`useTodos`, `useFilters`) or context/store.
 
-### 15. `any`-Typen
-**Wo**: 
-- `App.tsx`: `useState<any[]>([])` für `todos`, `editingTodo: Todo | null` aber `handleEdit(todo: any)`, `handleToggleDone(todo: any)`, `(t: any) => t.id`
+### 15. `any` Types
+**Where:**
+- `App.tsx`: `useState<any[]>([])` for `todos`, `handleEdit(todo: any)`, `handleToggleDone(todo: any)`
 - `TodoList.tsx`: `todos: any[]`
-- `TodoItem.tsx`: alle Props mit `any`
-**Erkennen**: `: any` und `<any>` an vielen Stellen — TypeScript ist effektiv ausgeschaltet
-**Fix**: Sauberer `Todo`-Typ in `types.ts` (existiert schon, wird aber von niemandem importiert), überall referenzieren
+- `TodoItem.tsx`: all props typed as `any`
+**How to spot:** `: any` and `<any>` in many places — TypeScript is effectively disabled
+**Fix:** Clean `Todo` type in `types.ts` (already exists but nobody imports it), reference everywhere
 
-### 16. Direkte fetch-Calls in Komponenten
-**Wo**: `App.tsx` (mehrere `fetch('/api/...')`), `TagManager.tsx` (`fetch('/api/tags')`)
-**Erkennen**: URL, Headers, JSON-Parsing alles inline in JSX-Komponenten
-**Fix**: `api.ts`-Modul mit `getTodos()`, `createTodo()`, etc. Idealerweise Custom Hooks (`useTodos`) oder React Query.
+### 16. Direct fetch Calls in Components
+**Where:** `App.tsx` (multiple `fetch('/api/...')`), `TagManager.tsx` (`fetch('/api/tags')`)
+**How to spot:** URL, headers, JSON parsing all inline in JSX components
+**Fix:** `api.ts` module with `getTodos()`, `createTodo()`, etc. Ideally custom hooks (`useTodos`) or React Query.
 
-### 17. Kein Error-Handling bei API-Calls
-**Wo**: alle fetch-Aufrufe in `App.tsx`, `TagManager.tsx` haben kein `.catch()`, kein Check auf `response.ok`
-**Erkennen**: Wenn Backend 500 zurückgibt (z.B. bei Tag-Delete-Bug), schluckt der Frontend-Code das und ruft `.then()` mit dem Error-Body weiter
-**Fix**: try/catch mit async/await, `if (!response.ok) throw...`, UI-State für Errors mit Toasts/Banners
+### 17. No Error Handling on API Calls
+**Where:** All fetch calls in `App.tsx`, `TagManager.tsx` have no `.catch()`, no `response.ok` check
+**How to spot:** When backend returns 500 (e.g. tag-delete bug), frontend swallows it and calls `.then()` with the error body
+**Fix:** try/catch with async/await, `if (!response.ok) throw...`, UI state for errors with toasts/banners
 
-### 18. useState-Wildwuchs
-**Wo**: `App.tsx` hat 18 separate `useState`-Calls (todos, tags, selectedTagId, doneFilter, priorityFilter, page, pageSize, showForm, editingTodo, title, description, priority, dueDate, selectedFormTagIds, showTagManager, searchTerm, totalCount, doneCount)
-**Erkennen**: viele zusammenhängende States werden separat gehalten (Form-State, Filter-State)
-**Fix**: `useReducer` für komplexen State, oder zusammengefasste Objekte (`useState<FormState>(...)`). Evtl. State-Library (Zustand, Jotai).
+### 18. useState Sprawl
+**Where:** `App.tsx` has 18 separate `useState` calls
+**How to spot:** Many related states kept separately (form state, filter state)
+**Fix:** `useReducer` for complex state, or grouped objects (`useState<FormState>(...)`). Or a state library (Zustand, Jotai).
 
-### 19. useEffect mit fehlenden Dependencies
-**Wo**: `App.tsx` Filter-Refetch-Effect — `// eslint-disable-next-line react-hooks/exhaustive-deps`. `pageSize` ist im Body benutzt aber nicht in der Deps-Liste.
-**Erkennen**: `eslint-disable` Kommentar — niemals akzeptieren ohne Begründung
-**Fix**: Alle benutzten Werte in Deps oder per `useCallback`/`useMemo` stabilisieren. Bei intent-statt-deps lieber Custom Hook.
+### 19. useEffect with Missing Dependencies
+**Where:** `App.tsx` filter refetch effect — `// eslint-disable-next-line react-hooks/exhaustive-deps`. `pageSize` is used in the body but not in the deps list.
+**How to spot:** `eslint-disable` comment — never accept without justification
+**Fix:** Include all used values in deps or stabilize with `useCallback`/`useMemo`. For intent-based deps, prefer a custom hook.
 
-### 20. Inline-Styles + CSS gemischt
-**Wo**: 
-- `App.tsx`: `style={{ display: 'flex', minHeight: '100vh' }}`, mehrfach inline für Search-Input, Stats
+### 20. Mixed Inline Styles and CSS
+**Where:**
+- `App.tsx`: `style={{ display: 'flex', minHeight: '100vh' }}`, inline styles for search input and stats
 - `TodoItem.tsx`: `style={{ opacity: ... }}`, `style={{ textDecoration: ... }}`, `style={{ color: priorityColor }}`
 - `TodoForm.tsx`: `style={{ marginRight: 8, ... }}`
-**Erkennen**: Mix aus CSS-Klassen und inline-Styles — Stil-Logik verteilt auf 2 Orte
-**Fix**: Alles in CSS Modules oder Styled-Components, dynamische Werte via CSS-Vars oder data-attributes
+**How to spot:** Mix of CSS classes and inline styles — style logic split across two places
+**Fix:** Everything in CSS modules or styled-components, dynamic values via CSS vars or data-attributes
 
-### 21. Prop-Drilling
-**Wo**: `App.tsx` → `<TodoList selectedFilter={doneFilter} />` → `TodoList.tsx` → `<TodoItem selectedFilter={selectedFilter} />` → `TodoItem.tsx` benutzt es nicht (!)
-**Erkennen**: `selectedFilter` wird durchgereicht und am Ende nicht verwendet — typisches "irgendjemand hat's mal gebraucht und nicht aufgeräumt"
-**Fix**: Prop entfernen (gar nicht benötigt). Bei echtem globalen State Context API oder State-Library nutzen.
+### 21. Prop Drilling
+**Where:** `App.tsx` → `<TodoList selectedFilter={doneFilter} />` → `TodoList.tsx` → `<TodoItem selectedFilter={selectedFilter} />` → `TodoItem.tsx` doesn't use it (!)
+**How to spot:** `selectedFilter` is passed through and never used at the end — classic "someone needed it once and never cleaned up"
+**Fix:** Remove the prop (not needed at all). For real global state use Context API or a state library.
 
-### 22. Keine Loading-/Error-States
-**Wo**: `App.tsx`, alle Components — keine `isLoading`, `error` States
-**Erkennen**: User sieht beim Laden leere Liste, beim Fehler nichts oder kaputte UI
-**Fix**: Loading-Skeletons, Error-Banner. Custom Hook (`useFetch`) der `{ data, loading, error }` zurückgibt.
+### 22. No Loading/Error States
+**Where:** `App.tsx`, all components — no `isLoading`, `error` states
+**How to spot:** User sees empty list while loading, nothing or broken UI on error
+**Fix:** Loading skeletons, error banner. Custom hook (`useFetch`) returning `{ data, loading, error }`.
 
-### 23. Formular ohne Validierung
-**Wo**: `TodoForm.tsx` und `App.tsx::handleSubmit` — kein Check auf leeren Title vor Submit
-**Erkennen**: Submit mit leerem Title schickt POST. Backend antwortet 400, Frontend ignoriert das (siehe Anti-Pattern 17), Modal bleibt offen ohne Feedback.
-**Fix**: Client-side Validierung mit Form-Library (react-hook-form, formik) oder manuell. Disabled-Submit + Inline-Errors.
+### 23. Form without Validation
+**Where:** `TodoForm.tsx` and `App.tsx::handleSubmit` — no check for empty title before submit
+**How to spot:** Submit with empty title sends a POST. Backend returns 400, frontend ignores it (see AP 17), modal stays open with no feedback.
+**Fix:** Client-side validation with a form library (react-hook-form, formik) or manually. Disabled submit + inline errors.
 
-### 24. Doppelte Type-Definitionen mit Drift
-**Wo**: 
-- `frontend/src/types.ts` — kanonisch, aber von **niemandem importiert**: `Todo { dueDate: string; description: string; tags: Tag[] }`
-- `App.tsx` — lokales `interface Todo { description?: string; dueDate?: string; tags?: any[] }` (drift)
-- `TodoForm.tsx` — lokales `interface FormTodo { dueDate: Date | string; ... }` (anderer drift; ungenutzt!)
-**Erkennen**: 3 Stellen mit "Todo"-Typ, leichte Unterschiede, types.ts ist toter Code
-**Fix**: types.ts als Single Source, überall importieren, lokale Interfaces löschen
+### 24. Duplicate Type Definitions with Drift
+**Where:**
+- `frontend/src/types.ts` — canonical, but **imported by nobody**: `Todo { dueDate: string; description: string; tags: Tag[] }`
+- `App.tsx` — local `interface Todo { description?: string; dueDate?: string; tags?: any[] }` (drifted)
+- `TodoForm.tsx` — local `interface FormTodo { dueDate: Date | string; ... }` (different drift; unused!)
+**How to spot:** 3 places with "Todo" type, slight differences, types.ts is dead code
+**Fix:** types.ts as single source, import everywhere, delete local interfaces
 
-### 25. Index als Key in Listen
-**Wo**: 
+### 25. Index as Key in Lists
+**Where:**
 - `TodoList.tsx`: `todos.map((todo, i) => <TodoItem key={i} ... />)`
 - `TagManager.tsx`: `tags.map((tag, i) => <li key={i}>...)`
-**Erkennen**: `key={i}` statt `key={item.id}`. Bei Reorder/Delete kann React Komponenten falsch updaten.
-**Fix**: `key={todo.id}` und `key={tag.id}`
+**How to spot:** `key={i}` instead of `key={item.id}`. On reorder/delete React may update the wrong component.
+**Fix:** `key={todo.id}` and `key={tag.id}`
 
 ---
 
 ## Bugs
 
-### Bug 1: Race Condition beim "Toggle Done"
-**Wo**: `App.tsx::handleToggleDone` und `TodoController::update` (Backend simuliert 200ms Delay)
-**Wie reproduzieren**: Schnell zweimal hintereinander auf die Checkbox eines Todos klicken (Backend hat `Thread.sleep(200)` im PUT für Demo-Zweck).
-**Was passiert**: Beim ersten Klick liest Handler `todo.done = false`, schickt PUT mit `done: true`. Während das in Flight ist, klickt User zweimal. Der zweite Klick liest immer noch `todo.done = false` (State noch nicht aktualisiert), schickt nochmal PUT mit `done: true`. Erwartet wäre nach 2 Klicks wieder `done = false`. Stattdessen: bleibt `done = true`. Wenn das Timing andersrum ist (Antworten kommen umgedreht an), wird der State zwischen true und false oszillieren.
-**Fix**: 
-1. Optimistic Update: erst `setTodos(state mit toggled)`, dann fetch — handler liest immer den aktuellen State
-2. AbortController nutzen um in-flight Requests zu canceln, oder
-3. Mutationen serialisieren (z.B. via React Query mit Mutations-Queue)
+### Bug 1: Race Condition on Toggle Done
+**Where:** `App.tsx::handleToggleDone` and `TodoController::update` (backend simulates 200ms delay)
+**How to reproduce:** Click a todo's checkbox twice quickly (backend has `Thread.sleep(200)` in PUT for demo purposes).
+**What happens:** First click reads `todo.done = false`, sends PUT with `done: true`. While in flight, user clicks again. Second click still reads `todo.done = false` (state not yet updated), sends another PUT with `done: true`. Expected after 2 clicks: `done = false`. Actual: stays `done = true`. If timing reverses (responses arrive out of order), state oscillates.
+**Fix:**
+1. Optimistic update: `setTodos(state with toggled)` first, then fetch — handler always reads current state
+2. Use AbortController to cancel in-flight requests, or
+3. Serialize mutations (e.g. via React Query mutation queue)
 
 ### Bug 2: Filter-Pagination Race
-**Wo**: `App.tsx::useEffect` mit deps `[doneFilter, priorityFilter, selectedTagId, page]`. Backend hat `Thread.sleep(150)` im GET zur Verstärkung.
-**Wie reproduzieren**: Filter schnell zwischen "All" → "Done" → "Open" wechseln (oder Tag in Sidebar schnell wechseln).
-**Was passiert**: useEffect feuert zwei Requests in Flight. Wenn die ältere Response später ankommt, überschreibt sie die neuere. UI zeigt falsche Liste, die nicht zum aktuellen Filter passt.
-**Fix**: 
+**Where:** `App.tsx::useEffect` with deps `[doneFilter, priorityFilter, selectedTagId, page]`. Backend has `Thread.sleep(150)` in GET to amplify it.
+**How to reproduce:** Switch filter rapidly between "All" → "Done" → "Open" (or switch tags quickly in sidebar).
+**What happens:** useEffect fires two requests in flight. If the older response arrives later, it overwrites the newer one. UI shows the wrong list that doesn't match the current filter.
+**Fix:**
 1. AbortController:
 ```ts
 useEffect(() => {
@@ -185,84 +185,84 @@ useEffect(() => {
   return () => ac.abort();
 }, [...]);
 ```
-2. Oder Request-ID/Stale-Check: jede Anfrage taggen, beim Receive prüfen ob noch aktuell.
-3. React Query nutzen — managed das automatisch.
+2. Or request ID/stale check: tag each request, verify on receive if still current.
+3. Use React Query — handles this automatically.
 
 ### Bug 3: dueDate Off-by-one
-**Wo**: 
-- Backend: `Todo.dueDate` als `LocalDate`, serialisiert als ISO-Date-String "2026-05-15"
-- Frontend: `TodoItem.tsx` macht `new Date(todo.dueDate).toLocaleDateString()`
-**Wie reproduzieren**: 
-1. DevTools öffnen → "Sensors" → Timezone Override auf "America/Los_Angeles"
-2. Page reload
-3. Todos mit due-Date werden jetzt einen Tag früher angezeigt
-**Was passiert**: `new Date("2026-05-15")` parsed als UTC midnight → `2026-05-15T00:00:00Z`. In TZ UTC-7 (Los Angeles) ist das `2026-05-14T17:00 local` → `toLocaleDateString()` gibt `5/14/2026`. In CET sieht man's nicht.
-**Fix**: 
-1. Tag-Strings nicht durch `Date` jagen. Direkt `dueDate.split('-').reverse().join('.')` oder mit Library wie `date-fns`/`dayjs`.
-2. Oder Backend gibt Datum als `{ year, month, day }` Objekt → Frontend hat keine TZ-Falle.
+**Where:**
+- Backend: `Todo.dueDate` as `LocalDate`, serialized as ISO date string "2026-05-15"
+- Frontend: `TodoItem.tsx` does `new Date(todo.dueDate).toLocaleDateString()`
+**How to reproduce:**
+1. Open DevTools → "Sensors" → Timezone override to "America/Los_Angeles"
+2. Reload page
+3. Todos with due dates now show one day earlier
+**What happens:** `new Date("2026-05-15")` parses as UTC midnight → `2026-05-15T00:00:00Z`. In UTC-7 (Los Angeles) that is `2026-05-14T17:00 local` → `toLocaleDateString()` returns `5/14/2026`. Not visible in CET.
+**Fix:**
+1. Don't pass date strings through `Date`. Use `dueDate.split('-').reverse().join('.')` directly, or a library like `date-fns`/`dayjs`.
+2. Or have the backend return the date as `{ year, month, day }` object → no timezone trap in frontend.
 
-### Bug 4: Tag-Orphan beim Delete (Variante 1: sichtbarer Crash)
-**Wo**: `TagController.delete()` — `tagRepository.deleteById(id)`. `Tag` hat `@ManyToMany(mappedBy = "tags")` (non-owning), `Todo` ist owning side mit Join-Tabelle `todo_tags`. Kein cascade, keine `@PreRemove` Logik.
-**Wie reproduzieren**: 
-1. UI öffnen → "Manage tags"
-2. Tag löschen, der noch mit Todos verknüpft ist (z.B. "work")
-3. Frontend zeigt nichts, aber DevTools-Network → 500 mit Stacktrace im Backend-Log: `org.h2.jdbc.JdbcSQLIntegrityConstraintViolationException: Referential integrity constraint violation`
-**Was passiert**: Hibernate sieht keine Cascade-Konfiguration auf der inversen Seite, löscht nur die Tag-Row, ignoriert die Join-Table-Einträge. H2 hat FK-Constraint aktiv → wirft.
-**Fix-Optionen**: 
-1. Service-Methode `deleteTag(id)` mit `@Transactional`, die zuerst alle `Todo`s lädt, die diesen Tag haben (bzw. SQL `DELETE FROM todo_tags WHERE tag_id=?`), dann Tag löscht.
-2. Saubere Konfiguration: ManyToMany sauber überdenken — bei klassischem Tagging-Setup besser eine explizite Join-Entity (`TodoTag`) mit eigener Repository.
-3. Schneller Fix für Demo-Zwecke: in `TagController.delete()` zuerst `for (Todo t : todoRepo.findAll()) { t.getTags().removeIf(tag -> tag.getId().equals(id)); todoRepo.save(t); }` — funktioniert, aber ist N+1 und nicht atomic. Besserer Fix: Custom Query `@Modifying @Query("DELETE FROM Todo t SET ... ")` o.ä.
+### Bug 4: Tag Orphan on Delete (visible crash)
+**Where:** `TagController.delete()` — `tagRepository.deleteById(id)`. `Tag` has `@ManyToMany(mappedBy = "tags")` (non-owning), `Todo` is owning side with join table `todo_tags`. No cascade, no `@PreRemove` logic.
+**How to reproduce:**
+1. Open UI → "Manage tags"
+2. Delete a tag still linked to todos (e.g. "work")
+3. Frontend shows nothing, but DevTools Network → 500 with stack trace in backend log: `JdbcSQLIntegrityConstraintViolationException: Referential integrity constraint violation`
+**What happens:** Hibernate sees no cascade config on the inverse side, deletes only the tag row, ignores the join table entries. H2 has FK constraint active → throws.
+**Fix options:**
+1. Service method `deleteTag(id)` with `@Transactional` that first removes the tag from all todos (or SQL `DELETE FROM todo_tags WHERE tag_id=?`), then deletes the tag.
+2. Proper config: reconsider the ManyToMany — for a classic tagging setup an explicit join entity (`TodoTag`) with its own repository is cleaner.
+3. Quick fix for demo purposes: in `TagController.delete()` first iterate all todos and remove the tag, then delete — works but is N+1 and not atomic.
 
 ---
 
-## Workshop-Ablauf-Vorschläge
+## Session Flow Suggestions
 
-### Aufwärm-Runde (15 min)
-- Teilnehmer App starten lassen, durchklicken
-- Frage: "Was fällt euch auf?" (User-Experience-Bugs notieren — fehlende Loading-States, Crash bei Tag-Delete, etc.)
+### Warm-up (15 min)
+- Have participants start the app and click through
+- Question: "What stands out?" (note UX bugs — missing loading states, tag-delete crash, etc.)
 
-### Backend-Refactor (60-90 min)
-- Constructor Injection einführen (1)
-- Service-Layer aufbauen (2 + 3)
-- DTOs einführen (4)
-- N+1 fixen (5)
+### Backend Refactor (60–90 min)
+- Introduce constructor injection (1)
+- Build service layer (2 + 3)
+- Introduce DTOs (4)
+- Fix N+1 (5)
 - @Transactional + @ControllerAdvice (6, 7)
 - Bean Validation (8)
 
-### Frontend-Refactor (60-90 min)
-- API-Client extrahieren (16)
+### Frontend Refactor (60–90 min)
+- Extract API client (16)
 - Loading/Error States (22, 17)
-- Types konsolidieren (15, 24)
-- Komponenten aufteilen (14)
+- Consolidate types (15, 24)
+- Split components (14)
 
-### Bug-Hunt (45 min)
-- Bug 1, 2 mit DevTools Network reproduzieren
-- Bug 3 mit TZ-Override demonstrieren
-- Bug 4 — Stack Trace lesen, Root Cause identifizieren
+### Bug Hunt (45 min)
+- Bugs 1, 2 with DevTools Network
+- Bug 3 with timezone override
+- Bug 4 — read stack trace, identify root cause
 
-### Diskussion (15 min)
-- Welches Anti-Pattern ist am gefährlichsten?
-- Wo würde KI-Tooling besonders helfen (Type-Inferenz, Test-Generation, Refactor-Vorschläge)?
+### Discussion (15 min)
+- Which anti-pattern is most dangerous?
+- Where would AI tooling help most (type inference, test generation, refactor suggestions)?
 
 ---
 
-## Performance-Demo-Tipps
+## Performance Demo Tips
 
-- N+1 (#5): bei `GET /api/todos` in der Console mitlesen, vorher/nachher zählen
-- Race Conditions (Bug 1, 2): Browser DevTools Network → "Slow 3G" emulation verstärkt es
-- Bug 3: TZ-Override in DevTools → Sensors
+- N+1 (#5): watch the console during `GET /api/todos`, count before/after
+- Race conditions (Bug 1, 2): Browser DevTools Network → "Slow 3G" emulation amplifies them
+- Bug 3: Timezone override in DevTools → Sensors
 
-## Hinweise zum Reset
+## Reset Notes
 
-- DB ist H2 in-memory — Backend-Restart resettet Daten via DataSeeder
-- Falls Frontend mal hängt: `npm run dev` neustarten
+- DB is H2 in-memory — restarting the backend resets data via DataSeeder
+- If frontend hangs: restart `npm run dev`
 
-## Was die App noch nicht hat (bewusst weggelassen)
+## Intentional Omissions
 
-- Authentifizierung
-- Persistenz über Restart hinaus
-- Rate-Limiting
-- Pagination im UI sinnvoll (Page-Größe ist auf 20 fix)
-- Realistische Error-Boundaries
+- Authentication
+- Persistence across restarts
+- Rate limiting
+- Meaningful UI pagination (page size is fixed at 20)
+- Realistic error boundaries
 
-Diese Lücken können in einer Folgesession Material liefern.
+These gaps can provide material for a follow-up session.
