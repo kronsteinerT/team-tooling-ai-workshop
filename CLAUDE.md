@@ -22,35 +22,27 @@ cd backend
 cd frontend
 npm install
 npm run dev              # start on http://localhost:5173
-npx tsc --noEmit         # type check (use ./node_modules/.bin/tsc if npx resolves wrong version)
+./node_modules/.bin/tsc --noEmit  # type check
 ```
 
 ## Architecture
 
-The frontend proxies `/api/*` to the backend (configured in `vite.config.ts`). The backend uses an H2 in-memory database that is seeded with 5 tags and 15 todos on every startup via `DataSeeder.java`.
+The frontend proxies `/api/*` to the backend (configured in `vite.config.ts`). The backend uses an H2 in-memory database seeded with 5 tags and 15 todos on every startup via `DataSeeder.java`.
 
 ### Backend layers
-- `controller/` — REST endpoints, request/response mapping via DTOs (`dto/`), no business logic
-- `service/TodoService.java` — filtering, sorting, pagination logic; all methods `@Transactional`
-- `repository/` — Spring Data JPA; `TodoRepository` has `@EntityGraph` methods to avoid N+1 on `tags`
+- `controller/` — REST endpoints; all business logic, filtering, sorting and pagination lives here (known issue)
+- `service/TodoService.java` — currently a pass-through to the repository with no logic
+- `repository/` — Spring Data JPA, no custom queries
 - `model/` — JPA entities (`Todo`, `Tag`, `Priority` enum); `Todo` owns the `@ManyToMany` join table
-- `controller/GlobalExceptionHandler.java` — `@RestControllerAdvice` handling validation errors (400), not-found (404), and generic errors (500)
 
-DTOs (`TodoResponse`, `TagResponse`, `TodoCreateRequest`, `TodoUpdateRequest`) decouple the API schema from JPA entities. Controllers return DTOs, never entities directly.
+Dependencies are injected via `@Autowired` field injection throughout. Controllers return JPA entities directly — no DTOs. Error handling is done with generic `try/catch` in every method.
 
 ### Frontend structure
-- `api.ts` — all `fetch` calls in one place; every function checks `res.ok` and throws on error
-- `types.ts` — single source of truth for `Todo` and `Tag` interfaces; import from here, never redefine locally
-- `App.tsx` — top-level state: `todos`, `tags`, `filters` (grouped object), `loading`/`error`, `showForm`/`editingTodo`
-- `components/Sidebar.tsx` — tag navigation, stats, tag manager toggle (owns `showTagManager` state)
-- `components/TodoForm.tsx` — self-contained form with own state; receives `initialValues` for edit mode, calls `onSubmit(data)` on save
-
-Filter state in `App.tsx` is a single object `{ done, priority, tagId, page }` — update via `setFilters(f => ({ ...f, key: value }))`. The `useEffect` watching `filters` uses an `AbortController` to cancel in-flight requests on rapid filter changes.
+- `App.tsx` — all state, all fetch calls, all event handlers, sidebar JSX (~260 lines)
+- `components/TodoList.tsx`, `TodoItem.tsx`, `TodoForm.tsx`, `TagManager.tsx`, `FilterBar.tsx`
+- `types.ts` — `Todo` and `Tag` interfaces exist but are not imported anywhere; `any` is used throughout
+- `fetch()` calls are made directly inside components with no error handling and no `res.ok` check
 
 ## H2 Console
 
 Available at `http://localhost:8080/h2-console` — JDBC URL: `jdbc:h2:mem:tododb`, user: `sa`, no password.
-
-## Logs
-
-Application logs are written to `todo.log` in the project root (configured in `backend/src/main/resources/logback-spring.xml`).
