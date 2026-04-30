@@ -47,6 +47,8 @@ Before starting work in an unfamiliar codebase, run:
 ```
 Claude will read the project structure, key files and patterns, then write a `CLAUDE.md` that gives every future session instant context. Takes 30 seconds and saves a lot of re-explaining.
 
+> **Note:** Your organization may have additional skills available (e.g. for Jira, GitHub, or internal tools). Run `/help` to see everything installed in your environment.
+
 ---
 
 ## Starting a Greenfield Project with Claude Code
