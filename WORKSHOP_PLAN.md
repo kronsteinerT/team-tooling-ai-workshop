@@ -13,6 +13,42 @@ You interact with it in natural language. It will read the relevant code, explai
 
 ---
 
+## Slash Commands & Skills
+
+Claude Code has built-in slash commands and skills that speed up common tasks. Type `/` in the Claude prompt to see available options.
+
+### Key slash commands
+
+| Command | What it does |
+|---------|-------------|
+| `/init` | Analyzes your codebase and creates a `CLAUDE.md` file with project context |
+| `/review` | Reviews a GitHub pull request for code quality, bugs and security issues |
+| `/help` | Shows all available commands |
+| `/clear` | Clears the conversation context (useful when switching tasks) |
+| `/compact` | Summarizes the conversation to free up context window space |
+| `/cost` | Shows token usage and cost for the current session |
+
+### What are Skills?
+
+Skills are reusable workflows that go beyond a single prompt — they run a sequence of steps to complete a more complex task. You invoke them the same way as slash commands.
+
+Some useful built-in skills:
+
+| Skill | What it does |
+|-------|-------------|
+| `/init` | Generates `CLAUDE.md` — also works as a skill that reads the whole codebase first |
+| `/review` | Full PR review across multiple files with structured feedback |
+
+### Practical tip: use `/init` at the start
+
+Before starting work in an unfamiliar codebase, run:
+```
+/init
+```
+Claude will read the project structure, key files and patterns, then write a `CLAUDE.md` that gives every future session instant context. Takes 30 seconds and saves a lot of re-explaining.
+
+---
+
 ## Starting a Greenfield Project with Claude Code
 
 When starting a new project from scratch, Claude Code works best when you give it enough context upfront rather than one small request at a time.
